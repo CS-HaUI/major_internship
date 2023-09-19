@@ -1,145 +1,69 @@
-import time
-import customtkinter
-import cv2
-from PIL import Image
-
+import sys
+# pip install pyqt5
+import cv2, time
+import numpy as np
+from PyQt5 import QtCore, QtGui, QtWidgets
+from PyQt5.QtCore import QThread, pyqtSignal, Qt
+from PyQt5.QtGui import QPixmap
+from PyQt5.QtWidgets import QApplication, QMainWindow
+from main_gui import Ui_MainWindow
 from config.config_system import *
+from system.components import CaptureVideo
+
+fps = 0
 
 
-class App(customtkinter.CTk):
-    def __init__(self, camera=None):
+class MainWindow(QMainWindow):
+    def __init__(self):
         super().__init__()
-        self.example_image = cv2.imread("dataset\\2.jpg")
+        self._translate = QtCore.QCoreApplication.translate
+        self.uic = Ui_MainWindow()
+        self.uic.setupUi(self)
+        self.configUI()
 
-        self.camera = cv2.VideoCapture(0)
-        self.ctk_image = None
+        self.uic.startButton.clicked.connect(self.start_capture_video)
+        self.uic.endButton.clicked.connect(self.stop_capture_video)
 
-        self.title("Nhận diện biển số xe")
-        self.geometry(f"{WIDTH}x{HEIGHT}+10+10")
-        self.resizable(False, False)
+        self.thread = {}
 
-        # set grid layout 1x2
-        self.grid_rowconfigure(0, weight=1)
-        self.grid_columnconfigure(1, weight=1)
+    def configUI(self):
+        self.uic.tabWidget.setGeometry(QtCore.QRect(START_X, START_Y, TABWIDGET_W, TABWIDGET_H))
+        # self.uic.detectBox.setGeometry(QtCore.QRect(
+        #     DETECT_BOX[0],
+        #     DETECT_BOX[1],
+        #     DETECT_BOX[2],
+        #     DETECT_BOX[3]
+        # ))
 
-        self.control = customtkinter.CTkFrame(self, corner_radius=0, width=SIZE_CONTROL)
-        self.detect_frame = customtkinter.CTkFrame(self, corner_radius=0, width=WIDTH - SIZE_CONTROL)
-        self.register_frame = customtkinter.CTkFrame(self, corner_radius=0, width=WIDTH - SIZE_CONTROL)
-        self.information_frame = customtkinter.CTkFrame(self, corner_radius=0, width=WIDTH - SIZE_CONTROL)
+    def closeEvent(self, event):
+        self.stop_capture_video()
 
-        self.top_df = customtkinter.CTkFrame(self.detect_frame, corner_radius=0, height=TOP_SIZE)
-        self.bottom_df = customtkinter.CTkFrame(self.detect_frame, corner_radius=0, height=HEIGHT - TOP_SIZE)
-        self.video_frame = customtkinter.CTkFrame(self.top_df, corner_radius=5, width=VIDEO_WIDTH)
-        self.information = customtkinter.CTkFrame(self.top_df, corner_radius=0, width=WIDTH - VIDEO_WIDTH)
+    def stop_capture_video(self):
+        self.thread[1].stop()
 
-        # ----------------- SELECT FRAME ----------------------------------
-        self.detect_image = customtkinter.CTkImage(Image.open(DETECT_PATH))
-        self.register_image = customtkinter.CTkImage(Image.open(REGISTER_PATH))
-        self.search_image = customtkinter.CTkImage(Image.open(SEARCH_PATH))
+    def start_capture_video(self):
+        self.thread[1] = CaptureVideo(index=1)
+        self.thread[1].start()
+        self.thread[1].signal.connect(self.show_wedcam)
 
-        # FRAME DETECTION
-        self.detect_button = customtkinter.CTkButton(self.control, corner_radius=0, height=40, border_spacing=10,
-                                                     text="Nhận diện",
-                                                     fg_color="transparent", text_color=("gray10", "gray90"),
-                                                     hover_color=("gray70", "gray30"),
-                                                     image=self.detect_image, anchor="w", command=self.detect_event)
-        self.detect_button.grid(row=1, column=0, sticky="ew")
+    def show_wedcam(self, cv_img):
+        """Updates the image_label with a new opencv image"""
+        qt_img = self.convert_cv_qt(cv_img)
+        self.uic.showFps.setText(f"FPS: {self.thread[1].fps}")
+        self.uic.label_2.setPixmap(qt_img)
 
-        # FRAME REGISTER
-        self.register_button = customtkinter.CTkButton(self.control, corner_radius=0, height=40, border_spacing=10,
-                                                       text="Đăng kí",
-                                                       fg_color="transparent", text_color=("gray10", "gray90"),
-                                                       hover_color=("gray70", "gray30"),
-                                                       image=self.register_image, anchor="w",
-                                                       command=self.register_event)
-        self.register_button.grid(row=2, column=0, sticky="ew")
-
-        # FRAME CHECK CAR IN DATABASE
-        self.information_button = customtkinter.CTkButton(self.control, corner_radius=0, height=40, border_spacing=10,
-                                                          text="Nhà xe",
-                                                          fg_color="transparent", text_color=("gray10", "gray90"),
-                                                          hover_color=("gray70", "gray30"),
-                                                          image=self.search_image, anchor="w",
-                                                          command=self.information_event)
-        self.information_button.grid(row=3, column=0, sticky="ew")
-        # ----------------- SELECT FRAME ----------------------------------
-
-        self.control.grid(row=0, column=0, sticky="nsew")
-        self.detect_frame.grid(row=0, column=1, sticky='nsew')
-        self.top_df.pack(side='top', fill='both', expand=True)
-        self.bottom_df.pack(side='bottom', fill='both', expand=True)
-
-        self.video_frame.pack(side='left', fill='both', expand=True)
-        self.information.pack(side='right', fill='both', expand=True)
-
-        self.display_video = customtkinter.CTkLabel(self.video_frame, text="", compound="left")
-        self.display_video.pack()
-
-    def update_video(self):
-        """
-        get current frame of stream video
-        """
-        # res, frame = self.camera.read()
-        res, frame = True, self.example_image
-        if res is not None:
-            # ---------------- FPS ------------------
-            # global start_time, frame_count
-            # frame_count += 1
-            # elapsed_time = time.time() - start_time
-            # if elapsed_time > 1:
-            #     fps = frame_count / elapsed_time
-            #     print(fps)
-            #     frame_count = 0
-            #     start_time = time.time()
-            # ---------------- FPS ------------------
-            self.ctk_image = customtkinter.CTkImage(
-                Image.fromarray(
-                    cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-                ),
-                size=(600, 400)
-            )
-            self.display_video.configure(image=self.ctk_image)
-        else:
-            self.camera.release()
-            cv2.destroyAllWindows()
-        self.after(10, self.update_video)
-
-    def set_current_frame(self, name):
-        """
-        :param name: name of current frame
-        :return:
-        """
-        self.detect_button.configure(fg_color=("gray75", "gray25") if name == "detect" else "transparent")
-        self.register_button.configure(fg_color=("gray75", "gray25") if name == "register" else "transparent")
-        self.information_button.configure(fg_color=("gray75", "gray25") if name == "information" else "transparent")
-        # show selected frame
-        if name == "detect":
-            self.detect_frame.grid(row=0, column=1, sticky='nsew')
-        else:
-            self.detect_frame.grid_forget()
-
-        if name == "register":
-            self.register_frame.grid(row=0, column=1, sticky="nsew")
-        else:
-            self.register_frame.grid_forget()
-        if name == "information":
-            self.information_frame.grid(row=0, column=1, sticky="nsew")
-        else:
-            self.information_frame.grid_forget()
-
-    def detect_event(self):
-        self.set_current_frame("detect")
-
-    def register_event(self):
-        self.set_current_frame("register")
-
-    def information_event(self):
-        self.set_current_frame("information")
+    def convert_cv_qt(self, cv_img):
+        """Convert from an opencv image to QPixmap"""
+        rgb_image = cv2.cvtColor(cv_img, cv2.COLOR_BGR2RGB)
+        h, w, ch = rgb_image.shape
+        bytes_per_line = ch * w
+        convert_to_Qt_format = QtGui.QImage(rgb_image.data, w, h, bytes_per_line, QtGui.QImage.Format_RGB888)
+        p = convert_to_Qt_format.scaled(591, 311, Qt.KeepAspectRatio)
+        return QPixmap.fromImage(p)
 
 
 if __name__ == "__main__":
-    start_time = time.time()
-    frame_count = 0
-    app = App()
-    app.update_video()
-    app.mainloop()
+    app = QApplication(sys.argv)
+    main_win = MainWindow()
+    main_win.show()
+    sys.exit(app.exec_())

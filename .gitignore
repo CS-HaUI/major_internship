@@ -1,4 +1,9 @@
+*.yml
+main.ui
+main1.py
 # Byte-compiled / optimized / DLL files
+papers/
+dataset/carplate/
 __pycache__/
 *.py[cod]
 *$py.class
