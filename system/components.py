@@ -1,26 +1,35 @@
-import cv2
-from config.config_system import *
+import cv2, time
+from PyQt5.QtCore import QThread, pyqtSignal
+import numpy as np
 
 
-class Camera:
-    def __init__(self, source=0):
-        self.source = source
-        self._frame = None
-        self._cam = None
-        self._frame_width = None
-        self._frame_height = None
-        self._is_running = False
-        self.res = True
-
-    def init_camera(self):
-        self._cam = cv2.VideoCapture(self.source)
-
-    def read_frame(self):
-        self.res, self._frame = self._cam.read()
-        return self.res, self._frame
+class CaptureVideo(QThread):
+    signal = pyqtSignal(np.ndarray)
 
 
-    def release_camera(self):
-        self._cam.release()
-        cv2.destroyAllWindows()
-        self.__init__(source=0)
+    def __init__(self, index):
+        self.index = index
+        print("start threading", self.index)
+        super(CaptureVideo, self).__init__()
+        self.start_time = time.time()
+        self.frame_count = 0
+        self.fps = 0
+
+    def run(self):
+        cap = cv2.VideoCapture(0)
+        while True:
+            ret, cv_img = cap.read()
+            if ret:
+                # ---------------- FPS ------------------
+                self.frame_count += 1
+                elapsed_time = time.time() - self.start_time
+                if elapsed_time > 1:
+                    self.fps = int(self.frame_count / elapsed_time)
+                    self.frame_count = 0
+                    self.start_time = time.time()
+                # ---------------- FPS ------------------
+                self.signal.emit(cv_img)
+
+    def stop(self):
+        # print("stop threading", self.index)
+        self.terminate()

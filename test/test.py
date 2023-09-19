@@ -1,45 +1,26 @@
 import cv2
 import numpy as np
 
-# Initialize the CUDA context
-cv2.cuda.setDevice(0)  # Use the first GPU (change the index as needed)
+# Create a blank image
+image = np.zeros((400, 600, 3), dtype=np.uint8)
 
-# Create a VideoCapture object to capture video from a camera or file
-cap = cv2.VideoCapture(0)  # Use the default camera (change as needed)
+# Define text properties
+text = "Fancy Text"
+font = cv2.FONT_HERSHEY_SIMPLEX
+font_scale = 2.5
+font_color = (255, 255, 255)  # White color in BGR
+thickness = 3
+line_type = cv2.LINE_AA  # Antialiased line for smoother text rendering
 
-# Check if the camera or file is opened successfully
-if not cap.isOpened():
-    print("Error: Could not open video source.")
-    exit()
+# Calculate text size to center it
+(text_width, text_height), baseline = cv2.getTextSize(text, font, font_scale, thickness)
+x = (image.shape[1] - text_width) // 2
+y = (image.shape[0] + text_height) // 2
 
+# Put the text on the image
+cv2.putText(image, text, (x, y), font, font_scale, font_color, thickness, line_type)
 
-
-while True:
-    # Capture a frame from the video source
-    ret, frame = cap.read()
-
-    if not ret:
-        print("Error: Could not read a frame.")
-        break
-
-    # Create GPU Mat object and upload the frame
-    gpu_frame = cv2.cuda_GpuMat()
-    gpu_frame.upload(frame)
-
-
-    # Download the result frame from GPU to CPU
-    result_frame = gpu_frame.download()
-
-    # Display the result frame
-    cv2.imshow('CUDA Gaussian Blur', result_frame)
-
-    # Check for the 'q' key to exit
-    if cv2.waitKey(1) & 0xFF == ord('q'):
-        break
-
-# Release resources
-cap.release()
+# Display the image
+cv2.imshow('Fancy Text Image', image)
+cv2.waitKey(0)
 cv2.destroyAllWindows()
-
-# Reset the CUDA device
-cv2.cuda.resetDevice()
